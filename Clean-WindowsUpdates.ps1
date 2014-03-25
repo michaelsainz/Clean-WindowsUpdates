@@ -3,7 +3,7 @@
 Removes Windows Updates using the Microsoft supported functions.
 
 .DESCRIPTION
-This script will use Microsoft supported methods to safely remove superceeded
+This script will use Microsoft supported methods to safely remove superseded
 updates from the system. Once removed, these updates cannot be uninstalled.
 The primary benefit is recoverying disk space.
 
