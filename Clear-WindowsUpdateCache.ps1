@@ -1,202 +1,102 @@
-﻿#Requires -Version 3
-<#
-.Synopsis
-   Removes Windows Updates using the Microsoft supported functions.
+﻿@@ -0,0 +1,99 @@
+﻿<#
+.SYNOPSIS 
+Removes Windows Updates using the Microsoft supported functions.
+
 .DESCRIPTION
-   This script will use Microsoft supported methods to safely remove superseded
-   updates from the system. Once removed, these updates cannot be uninstalled.
-   The primary benefit is recoverying disk space.
-.EXAMPLE
-   Clear-WindowsUpdateCache -ComputerName <string>
-.EXAMPLE
-   Another example of how to use this cmdlet
-.INPUTS
-   Inputs to this cmdlet (if any)
-.OUTPUTS
-   Output from this cmdlet (if any)
+This script will use Microsoft supported methods to safely remove superseded
+updates from the system. Once removed, these updates cannot be uninstalled.
+The primary benefit is recoverying disk space.
+
 .NOTES
-   Michael Sainz
-   mike@iamdigerati.com
-.COMPONENT
-   The component this cmdlet belongs to
-.ROLE
-   The role this cmdlet belongs to
-.FUNCTIONALITY
-   The functionality that best describes this cmdlet
+Michael Sainz
+mike@iamdigerati.com
+
+.LINK
+http://www.iamdigerati.com/
+
 #>
-[CmdLetBinding()]
-Param (        
-    [Parameter(
-        Mandatory=$false, 
-        ValueFromPipeline=$true,
-        ValueFromPipelineByPropertyName=$true, 
-        ValueFromRemainingArguments=$false, 
-        HelpMessage="Enter one or more computer names seperated by commas.")]
-    [Alias("MachineName","CN")] 
-    [String[]]$ComputerName = $env:COMPUTERNAME
-)
 
-function Test-Hotfix {
-    [CmdletBinding()]
-    Param (
-        # Accept a single or multiple computers from the pipeline
-        [Parameter(
-            Mandatory=$false, 
-            ValueFromPipeline=$true,
-            ValueFromPipelineByPropertyName=$true, 
-            ValueFromRemainingArguments=$false, 
-            HelpMessage="Enter one or more computer names seperated by commas.")]
-        [Alias("MachineName","CN")]
-        [String[]]$ComputerName = $env:COMPUTERNAME
-    )
-    Begin {
-        ForEach($C in $ComputerName) {
-        Write-Debug -Message "Entering Test-Hotfix function for $C."
-        }
-    }
-    Process {
-        ForEach($C in $ComputerName) {
-            Try {
-                Write-Debug -Message "Checking $C for Windows Update KB2852386."
-                Write-Verbose -Message "Checking for Windows 7 Hotfix on $C."
-                Get-HotFix -ComputerName $C -Id KB2852386 -ErrorAction Stop | Out-Null
-                Write-Verbose -Message "Hotfix is installed on $C."
-            }
-	        Catch [System.UnauthorizedAccessException] {
-		        Write-Verbose -Message "Unable to access the remote computer- Access is denied. Exiting."
-            }
-            Catch [System.Management.Automation.RuntimeException] {
-                Write-Verbose -Message "Hotfix not installed. Exiting."
-            }
-        }
-    }
-    End {
-        Write-Debug -Message "Exiting Get-Hotfix function."
-    }
-}
+[CmdletBinding()]
+Param()
 
-function Clear-Windows7UpdateCache {
-    [CmdletBinding()]
-    Param (
-        # Accept a single or multiple computers from the pipeline
-        [Parameter(
-            Mandatory=$false, 
-            ValueFromPipeline=$true,
-            ValueFromPipelineByPropertyName=$true, 
-            ValueFromRemainingArguments=$false, 
-            HelpMessage="Enter one or more computer names seperated by commas.")]
-        [Alias("MachineName","CN")] 
-        [String[]]$ComputerName = $env:COMPUTERNAME
-    )
+$DebugPreference = "Continue"
 
-    Begin {
-        $Key = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup"
-        ForEach($C in $ComputerName) {
-            Write-Debug -Message "Entering Clear-Windows7UpdateCache function."
-        }
-    }
-    Process {
-	    ForEach($C in $ComputerName) {
-            Try {
-                Write-Verbose -Message "Executing the Windows Cleanup Manager on $C."
-                
-                Invoke-Command -ComputerName $C -ErrorAction Stop -ScriptBlock {
-                    New-ItemProperty -Path $Args[0] -Name StateFlags0128 -PropertyType DWord -Value 2 -ErrorAction Stop | Out-Null} -ArgumentList $Key
-		        Invoke-Command -ComputerName $C -ErrorAction Stop -ScriptBlock {
-                Start-Process CleanMgr.exe -ArgumentList "/sagerun:128" -NoNewWindow -Wait}
-	            
-                Write-Verbose -Message "Successfully removed superseded updates on $C."
-            }
-            Catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-                Write-Debug -Message "PSRemoting exception. WinRM is not configured."
-                Write-Verbose -Message "PSRemoting (WinRM) needs to be enabled on $C."
-            }
-        }
-    }
-    End {
-        Invoke-Command -ComputerName $C -ErrorAction Stop -ScriptBlock {
-                Remove-ItemProperty -Path $Args[0] -Name StateFlags0128} -ArgumentList $Key
-        
-        Write-Debug -Message "Exiting Clear-Windows7UpdateCache function."
-    }
-}
-
-function Clear-Win81UpdateCache {
-    [CmdletBinding()]
-    [OutputType([int])]
-    Param (
-        # Accept a single or multiple computers from the pipeline
-        [Parameter(
-            Mandatory=$false, 
-            ValueFromPipeline=$true,
-            ValueFromPipelineByPropertyName=$true, 
-            ValueFromRemainingArguments=$false, 
-            HelpMessage="Enter one or more computer names seperated by commas.")]
-        [Alias("MachineName","CN")] 
-        [String[]]$ComputerName = $env:COMPUTERNAME
-    )
-
-    Begin {
-        Write-Debug -Message "Entering Clear-Win81UpdateCache function."
-        Write-Verbose -Message "Clearing Windows 8.1 Updates on $ComputerName."
-    }
-    Process {
-        Try {
-            Invoke-Command -ComputerName $ComputerName -ErrorAction Stop -ScriptBlock {
-                Start-Process DISM.exe -ArgumentList "/Online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait}
-            Write-Verbose -Message "Successfully cleaned Windows Updates out of the Windows Component Store on $ComputerName."
-        }
-        Catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-            Write-Debug -Message "PSRemoting exception. WinRM is not configured."
-            Write-Verbose -Message "PSRemoting (WinRM) needs to be enabled on $ComputerName."
-        }
-    }
-    End {
-        Write-Debug -Message "Exiting Clear-Win81UpdateCache function."
-    }
-}
-
+Write-Debug "Checking for Administrator rights."
 $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $Principal = New-Object Security.Principal.WindowsPrincipal $Identity
 If ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -eq $False) {
-	Write-Verbose -Message "Please run this script with Administrator rights. Exiting."
+	Write-Debug "Script isn't running with Administrator rights. Exiting."
+    Write-Verbose "Please run this script with Administrator rights. Exiting."
     Exit
+    }
+
+function Check-Hotfix {
+	Write-Debug "Entered function Check-Hotfix."
+	Try {
+		Get-HotFix -Id KB2852386 -ErrorAction Stop
+		Write-Debug "Hotfix KB2852386 is installed."
+	}
+	Catch {
+		Write-Debug "The Get-Hotfix cmdlet returned an error."
+        Write-Verbose "Missing needed hotfix."
+    }
+	Finally {
+		Write-Debug "Exiting function Check-Hotfix."
+	}
 }
 
-ForEach ($C in $ComputerName) {
-    If($C -eq $env:COMPUTERNAME) {
-        Write-Debug -Message "Running locally on this system."
-        If([Environment]::OSVersion.Version -lt (New-Object 'Version' 6,2)) {
-            Write-Verbose -Message "Currently running Windows 7. Calling the Windows Cleanup Wizard."
-            Test-Hotfix -ComputerName $C
-            Clear-Windows7UpdateCache -ComputerName $C
-        }
-
-        ElseIf([Environment]::OSVersion.Version -ge (New-Object 'Version' 6,2)) {
-            Write-Verbose -Message "Currently running Windows 8.1 or higher. Calling the DISM tool."
-            Clear-Win81UpdateCache -ComputerName $C
-        }
-    }
-    Else {
-        Try {
-            Write-Verbose -Message "Connecting to $C..."
-            Write-Debug -Message "Getting the WMI Class for $C."
-            $OS = Get-WmiObject -ClassName Win32_OperatingSystem -ComputerName $C -ErrorAction Stop
-        }
-        Catch [System.Runtime.InteropServices.COMException] {
-            Write-Verbose -Message "Could not connect to $C. Ensure that the system is online and that WinRM is configured correctly."
-        }
-        
-        If($OS.Version -like '6.1.*') {
-        Write-Verbose -Message "Currently running Windows 7. Calling the Windows Cleanup Wizard."
-        Test-Hotfix -ComputerName $C
-        Clear-Windows7UpdateCache -ComputerName $C
-        }
-
-        ElseIf($OS.Version -like '6.3.*') {
-        Write-Debug -Message "I got Windows 8.1."
-        Write-Verbose -Message "Currently Running Windows 8.1 or higher. Calling the DISM tool."
-        Clear-Win81UpdateCache -ComputerName $C
-        }
+Function Clean-Windows7Updates {
+Write-Debug "Entered function Clean-Windows7Updates."
+If (Check-Hotfix -eq True) {
+	Write-Debug "Writing a registry key to variable."
+	$Key = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup"
+	Try {
+		Write-Debug "Writing the registry configuration for the Cleanup function."
+        New-ItemProperty -Path $Key -Name StateFlags0128 -PropertyType DWord -Value 2 -ErrorAction Stop | Out-Null
+        Write-Debug "Successfully set registry key for the Cleanup function."
+	}
+	Catch [System.Management.Automation.ActionPreferenceStopException] {
+		Write-Debug "Couldn't write the registry key needed for the Cleanup function."
+	}
+	Catch {
+		Write-Debug "A general error occured, exiting."
+	}
+	Finally {}
+	
+    Write-Debug "Executing the Cleanup Manager process."
+    Write-Verbose "Executing the Windows Cleanup Manager."
+	Start-Process CleanMgr.exe -ArgumentList "/sagerun:128" -NoNewWindow -Wait
+	Write-Debug "Cleaning up registry configuration for the Cleanup function."
+	Remove-ItemProperty -Path $Key -Name StateFlags0128
+    Write-Verbose "Successfully cleaned Windows Updates out of the Windows Component Store."
+}
+Else{
+	Write-Verbose "Hotfix KB2852386 is not installed on this machine. Exiting."
     }
 }
+Function Clean-Windows81Updates {
+    Write-Debug "Entered function Clean-Windows81Updates."
+    Try {
+    Write-Debug "Executing DISM tool."
+    Start-Process DISM.exe -ArgumentList "/Online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait
+    Write-Debug "DISM completed successfully."
+    Write-Verbose "Successfully cleaned Windows Updates out of the Windows Component Store."
+    }
+    Catch {
+    Write-Debug "Caught an unknown error while executing DISM process."
+    Write-Verbose "An unknown error occurred while attempting to execute the DISM tool. Exiting"
+    Exit
+    }
+    Finally {}
+}
+If([Environment]::OSVersion.Version -lt (New-Object 'Version' 6,2)) {
+    Write-Verbose "Currently running Windows 7. Calling Windows Cleanup Wizard."
+    Clean-Windows7Updates
+}
+ElseIf([Environment]::OSVersion.Version -ge (New-Object 'Version' 6,2)) {
+    Write-Verbose "Currently running Windows 8.1 or higher. Calling the DISM tool."
+    Clean-Windows81Updates
+}
+ No newline at end of file
+
